@@ -1,21 +1,22 @@
+# Import necessary libraries
 from dash import Dash, html, dcc, dash_table, Input, Output, State
 import plotly.express as px
 import pandas as pd
 
-# Load dataset
-df = pd.read_csv("5.1PCSV.csv")  # Ensure file is correctly loaded
+# Load the CSV file containing gyroscope data
+df = pd.read_csv("5.1PCSV.csv") 
 
 # Initialize Dash app
 app = Dash(__name__)
 
-# Track the current data window index
-current_index = 0  # To be used in callbacks
+# initialising the current data index to zero
+current_index = 0  
 
-# Layout
+# Define the layout of the dashboard how text should align in center
 app.layout = html.Div([
     html.H1("Gyroscope Data Dashboard", style={'textAlign': 'center'}),
 
-    # Dropdown for selecting graph type
+    # Dropdown for selecting graph type (Line, Scatter, Histogram) , so we can choose whatever graph we want 
     dcc.Dropdown(
         id='graph-type',
         options=[
@@ -23,34 +24,34 @@ app.layout = html.Div([
             {'label': 'Scatter Plot', 'value': 'scatter'},
             {'label': 'Histogram (Distribution)', 'value': 'histogram'}
         ],
-        value='line'
+        value='line'  # Default selection
     ),
 
-    # Multi-Select Dropdown for choosing axes
+    # Multi-select dropdown for choosing which axis to plot (x, y, z) on our graph
     dcc.Dropdown(
         id='axis-selection',
         options=[{'label': col, 'value': col} for col in ['x', 'y', 'z']],
-        value=['x', 'y', 'z'],
+        value=['x', 'y', 'z'],  # Default selection
         multi=True
     ),
 
-    # Input for number of samples
+    # Input for specifying the number of samples to display ata time
     dcc.Input(id="num-samples", type="number", value=100, step=10),
 
-    # Previous and Next Buttons
+    # Previous and Next buttons for navigating through data 
     html.Div([
         html.Button("Previous", id="prev-btn", n_clicks=0),
         html.Button("Next", id="next-btn", n_clicks=0)
     ], style={'margin-bottom': '20px'}),
 
-    # Graph output
+    # Graph output to display what we asked for
     dcc.Graph(id='graph-output'),
 
-    # Table to display statistical summary
+    # DataTable to show statistical summary of the selected data
     dash_table.DataTable(id='stats-table', style_table={'overflowX': 'auto'})
 ])
 
-# Callback to update graph based on user input and navigation
+# Callback function to update graph and statistical table based on user inputs
 @app.callback(
     [Output('graph-output', 'figure'),
      Output('stats-table', 'data'),
@@ -63,24 +64,26 @@ app.layout = html.Div([
     [State('num-samples', 'value')]
 )
 def update_graph(graph_type, selected_axes, num_samples, prev_clicks, next_clicks, num_samples_state):
-    global current_index
+    global current_index  # Use global variable to track data window
 
+    # Ensure at least one axis is selected
     if not selected_axes:
         return px.line(title="Please select at least one axis"), [], []
 
-    # Calculate new index based on button clicks
+    # Define the maximum index to prevent out-of-bounds errors
     max_index = len(df) - num_samples_state
-    step = num_samples_state if num_samples_state else 100
+    step = num_samples_state if num_samples_state else 100  # Default step if None
 
+    # Adjust the current index based on button clicks
     current_index = max(0, min(max_index, current_index + (next_clicks - prev_clicks) * step))
 
-    # Filter data for display
+    # Extract a subset of data for display
     filtered_df = df.iloc[current_index: current_index + num_samples_state]
 
-    # Melt DataFrame for multiple line plotting
+    # Transform data to long format for better visualization
     melted_df = filtered_df.melt(id_vars=['timestamp'], value_vars=selected_axes, var_name='axis', value_name='value')
 
-    # Choose graph type
+    # Choose the appropriate graph type based on user selection
     if graph_type == 'line':
         fig = px.line(melted_df, x='timestamp', y='value', color='axis', title="Gyroscope Data")
     elif graph_type == 'scatter':
@@ -88,12 +91,12 @@ def update_graph(graph_type, selected_axes, num_samples, prev_clicks, next_click
     elif graph_type == 'histogram':
         fig = px.histogram(melted_df, x='value', color='axis', title="Gyroscope Data Distribution", nbins=30)
 
-    # Calculate summary statistics
+    # Compute summary statistics for selected axes
     stats_data = filtered_df[selected_axes].describe().reset_index().to_dict('records')
     stats_columns = [{"name": i, "id": i} for i in filtered_df[selected_axes].describe().reset_index().columns]
 
-    return fig, stats_data, stats_columns
+    return fig, stats_data, stats_columns  # Return updated graph and stats table
 
-# Run app
+# Run the Dash app in debug mode
 if __name__ == '__main__':
     app.run(debug=True)
